@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <mpi.h>
 
@@ -54,30 +55,23 @@ int main(int argc, char** argv)
     {
         local_y[i] = 0;
     }
-    int nominal1 = M / P; int extra1 = M % P;
-    int nominal2 = M / Q; int extra2 = M % Q;
     std::cout << "Rank: " << rank << " row: " << row << " col: " << col << std::endl;
     for (int i=0; i < local_size; i++)
     {
-        // x local to global: given that this element is (p,i), what is its global index I?
-        int I = i + ((rank < extra1) ? (nominal1+1)*rank :
-                (extra1*(nominal1+1)+(rank-extra1)*nominal1));
+    // x local to global: given that this element is (p,i), what is its global index I?
+    int I = i*rank + rank;
 
-        // so to what (qhat,jhat) does this element of the original global vector go?
-        int qhat = (I < extra2*(nominal2+1)) ? I/(nominal2+1) : 
-                                                (extra2+(I-extra2*(nominal2+1))/nominal2);
-        int jhat = I - ((qhat < extra2) ? (nominal2+1)*qhat :
-                (extra2*(nominal2+1) + (qhat-extra2)*nominal2));
+    // so to what (qhat,jhat) does this element of the original global vector go?
+    int qhat = I%Q;
+    int jhat = I/Q;
 
-        std::cout << "I: " << I << " qhat: " << qhat << " jhat: " << jhat << std::endl;
-
-        if(qhat == col)  // great, this process has an element of y!
-        { 
-            local_y[jhat%local_size] = local_x[i];
-        }
+    if(qhat == col)  // great, this process has an element of y!
+    { 
+        local_y[jhat] = local_x[i];
+    }
     }
 
-    // use MPI_Allreduce to get the global vector y
+    // use MPI_AllReduce to gather all local_y vectors into global_y
     int* global_y = new int[local_size];
     MPI_Allreduce(local_y, global_y, local_size, MPI_INT, MPI_SUM, col_comm);
 
