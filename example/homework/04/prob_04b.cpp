@@ -54,25 +54,36 @@ int main(int argc, char** argv)
     {
         local_y[i] = 0;
     }
+    int nominal1 = M / P; int extra1 = M % P;
+    int nominal2 = M / Q; int extra2 = M % Q;
     std::cout << "Rank: " << rank << " row: " << row << " col: " << col << std::endl;
     for (int i=0; i < local_size; i++)
     {
-    // x local to global: given that this element is (p,i), what is its global index I?
-    int I = i*rank + rank;
+        // x local to global: given that this element is (p,i), what is its global index I?
+        int I = i*rank + rank;
 
-    // so to what (qhat,jhat) does this element of the original global vector go?
-    int qhat = I%Q;
-    int jhat = I/Q;
+        // so to what (qhat,jhat) does this element of the original global vector go?
+        int qhat = I%Q;
+        int jhat = I/Q;
 
-    if(qhat == col)  // great, this process has an element of y!
-    { 
-        local_y[jhat] = local_x[i];
+        if(qhat == col)  // great, this process has an element of y!
+        { 
+            local_y[jhat] = local_x[i];
+        }
     }
-    }
-
-    // use MPI_AllReduce to gather all local_y vectors into global_y
+    // use MPI_Allreduce to get the global vector y
     int* global_y = new int[local_size];
-    MPI_Allreduce(local_y, global_y, local_size, MPI_INT, MPI_SUM, col_comm);
+    MPI_Allreduce(local_y, global_y, local_size, MPI_INT, MPI_SUM, row_comm);
+
+    // do dot product
+    int dot_product = 0;
+    for (int i = 0; i < local_size; i++)
+    {
+       dot_product += local_x[i] * global_y[i]; 
+    }
+
+    // get dot_product
+    MPI_Allreduce(&dot_product, &dot_product, 1, MPI_INT, MPI_SUM, col_comm);
 
     // Print local vector
     std::cout << "local_x: ";
@@ -87,8 +98,6 @@ int main(int argc, char** argv)
         std::cout << local_y[i] << " ";
     }
     std::cout << std::endl;
-
-    // Print global vector
     std::cout << "global_y: ";
     for (int i = 0; i < local_size; i++)
     {
@@ -96,10 +105,12 @@ int main(int argc, char** argv)
     }
     std::cout << std::endl;
 
+    // Print end dot product
+    std::cout << "dot_product: " << dot_product << std::endl;
+
     // Free communicators and memory
     delete[] local_x;
     delete[] local_y;
-    delete[] global_y;
 
     MPI_Comm_free(&row_comm);
     MPI_Comm_free(&col_comm);
